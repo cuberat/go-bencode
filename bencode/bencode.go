@@ -36,14 +36,22 @@ package bencode
 
 import (
     "bufio"
+    // "bytes"
     "fmt"
     // "log"
     "io"
+    "reflect"
     "strconv"
+    "strings"
 )
 
 type Decoder struct {
-    r *bufio.Reader
+    // r *bufio.Reader
+    r *breader
+}
+
+type Encoder struct {
+    w *io.Writer
 }
 
 // A Delim is a byte representing the start or end of a list or dictionary:
@@ -55,18 +63,171 @@ type Delim byte
 //     Delim, representing the beginning lists and dictionaries: l d
 //         or the end of one: e
 //     int64, for integers
-//     []byte, for byte strings
+//     string, for strings
 type Token interface{}
 
 // func Unmarshal(data []byte, v interface {}) error {
 
 // }
 
+type breader struct {
+    r *bufio.Reader
+    pos uint64
+}
+
+func ParseString(s string) (interface{}, error) {
+    r := strings.NewReader(s)
+    return Parse(r)
+}
+
+func Parse(r io.Reader) (interface{}, error) {
+    dec := NewDecoder(r)
+    v, err := dec.Parse()
+
+    if err == io.EOF {
+        err = nil
+    }
+
+    return v, err
+}
+
+func (r *breader) Read(p []byte) (n int, err error) {
+    n, err = r.r.Read(p)
+    r.pos += uint64(n)
+
+    return n, err
+}
+
+func (r *breader) UnreadByte() error {
+    err := r.r.UnreadByte()
+    if err == nil {
+        r.pos -= 1
+    }
+
+    return err
+}
+
+func (r *breader) Tell() uint64 {
+    return r.pos
+}
+
+func new_reader (r io.Reader) (*breader) {
+    reader := new(breader)
+    reader.r = bufio.NewReader(r)
+
+    return reader
+}
+
 func NewDecoder(r io.Reader) *Decoder {
     dec := new(Decoder)
-    dec.r = bufio.NewReader(r)
+    dec.r = new_reader(r)
+    // dec.r = bufio.NewReader(r)
 
     return dec
+}
+
+// func Unmarshal(data []byte, v interface{}) error {
+//     dec := NewDecoder(bytes.NewReader(data))
+//     return dec.UnmarshalNext(v)
+// }
+
+// func (dec *Decoder) UnmarshalNext(v interface{}) error {
+
+//     return nil
+// }
+
+func (dec *Decoder) Parse() (interface{}, error) {
+    token, err := dec.Token()
+    if err != nil {
+        return nil, err
+    }
+
+    switch token.(type) {
+    case Delim:
+        switch token.(Delim) {
+        case 'l':
+            l, err := dec.parse_list()
+            if err != nil {
+                return nil, fmt.Errorf("error parsing list: %s", err)
+            }
+            return l, nil
+        case 'd':
+            d, err := dec.parse_dict()
+            if err != nil {
+                return nil, fmt.Errorf("error parsing dict: %s", err)
+            }
+            return d, nil
+        default:
+        }
+
+    default:
+        return token, nil
+    }
+
+    return nil, nil
+}
+
+func (dec *Decoder) parse_dict() (map[string]interface{}, error) {
+    l, err := dec.parse_list()
+    if err != nil {
+        return nil, err
+    }
+
+    if (len(l) & 1) != 0 {
+        return nil, fmt.Errorf("odd number of elements in dict at byte %d",
+            dec.r.Tell())
+    }
+
+    d := make(map[string]interface{})
+    for len(l) > 0 {
+        k, ok := l[0].(string)
+        if !ok {
+            this_type := reflect.TypeOf(l[0])
+            kind := this_type.Kind()
+            return nil, fmt.Errorf("invalid type for dictionary key %s at byte %d.  must be a string.",
+                kind.String(), dec.r.Tell())
+        }
+        d[k] = l[1]
+        l = l[2:]
+    }
+
+    return d, nil
+}
+
+func (dec *Decoder) parse_list() ([]interface{}, error) {
+    l := make([]interface{}, 0, 0)
+
+    for token, err := dec.Token(); err == nil; token, err = dec.Token() {
+        // switch t := token.(type) {
+        switch token.(type) {
+        case Delim:
+            switch token.(Delim) {
+            case 'l':
+                this_list, err := dec.parse_list()
+                if err != nil {
+                    return nil, err
+                }
+                l = append(l, this_list)
+            case 'd':
+                this_dict, err := dec.parse_dict()
+                if err != nil {
+                    return nil, err
+                }
+                l = append(l, this_dict)
+            case 'e':
+                // end of list
+                return l, nil
+            default:
+                return nil, fmt.Errorf("unrecognized token at byte %d",
+                    dec.r.Tell())
+            }
+
+        default:
+            l = append(l, token)
+        }
+    }
+
+    return l, nil
 }
 
 func (dec *Decoder) Token() (Token, error) {
@@ -97,20 +258,19 @@ func (dec *Decoder) Token() (Token, error) {
         r.UnreadByte()
         return dec.get_string()
     default:
-        return nil, fmt.Errorf("unexpected byte %s", s)
+        return nil, fmt.Errorf("unexpected byte '%s' near byte %d",
+            s, r.Tell())
     }
 
     return nil, nil
 }
 
-func (dec *Decoder) get_string() ([]byte, error) {
+func (dec *Decoder) get_string() (string, error) {
     size_64, err := dec.get_int(':')
     if err != nil {
-        return nil, err
+        return "", err
     }
     size := int(size_64)
-
-    // log.Printf("get_string(): size=%d", size)
 
     p := make([]byte, size, size)
     p_read := p[:]
@@ -118,24 +278,23 @@ func (dec *Decoder) get_string() ([]byte, error) {
 
     r := dec.r
     for n, err := r.Read(p_read); amtread < size; n, err = r.Read(p_read) {
-        // log.Printf("p_read (%d): '%s'", n, p_read)
         amtread += n
 
         if err != nil {
             if err == io.EOF {
                 break
             }
-            return nil, err
+            return "", err
         }
 
         p_read = p_read[n:]
     }
 
     if amtread < size {
-        return nil, fmt.Errorf("short read while reading string")
+        return "", fmt.Errorf("short read while reading string")
     }
 
-    return p, nil
+    return string(p), nil
 }
 
 func (dec *Decoder) get_int(end byte) (int64, error) {
@@ -161,7 +320,8 @@ func (dec *Decoder) get_int(end byte) (int64, error) {
             break
         }
 
-        return 0, fmt.Errorf("unexpected byte '%s' in integer spec", d)
+        return 0, fmt.Errorf("unexpected byte '%s' in integer spec near byte %d",
+            d, r.Tell())
     }
 
     return strconv.ParseInt(string(digits), 10, 64)
