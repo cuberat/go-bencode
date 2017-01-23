@@ -51,7 +51,7 @@ type Decoder struct {
 }
 
 type Encoder struct {
-    w *io.Writer
+    w io.Writer
 }
 
 // A Delim is a byte representing the start or end of a list or dictionary:
@@ -78,6 +78,20 @@ type breader struct {
 func ParseString(s string) (interface{}, error) {
     r := strings.NewReader(s)
     return Parse(r)
+}
+
+func DecodeString(s string) (interface{}, error) {
+    return ParseString(s)
+}
+
+func Decode(r io.Reader) (interface{}, error) {
+    return Parse(r)
+}
+
+// Not completed yet
+func Encode(w io.Writer, v interface{}) (string, error) {
+    enc := NewEncoder(w)
+    return enc.Encode(v)
 }
 
 func Parse(r io.Reader) (interface{}, error) {
@@ -118,12 +132,35 @@ func new_reader (r io.Reader) (*breader) {
     return reader
 }
 
+func NewEncoder(w io.Writer) *Encoder {
+    enc := new(Encoder)
+    enc.w = w
+
+    return enc
+}
+
 func NewDecoder(r io.Reader) *Decoder {
     dec := new(Decoder)
     dec.r = new_reader(r)
     // dec.r = bufio.NewReader(r)
 
     return dec
+}
+
+// Not completed yet
+func (enc *Encoder) Encode(v interface{}) (string, error) {
+    this_type := reflect.TypeOf(v)
+    this_kind := this_type.Kind()
+
+    switch this_kind {
+    case reflect.Map:
+    case reflect.Struct:
+    case reflect.Slice:
+    case reflect.Array:
+        
+    }
+
+    return "", nil
 }
 
 // func Unmarshal(data []byte, v interface{}) error {
@@ -271,6 +308,10 @@ func (dec *Decoder) get_string() (string, error) {
         return "", err
     }
     size := int(size_64)
+    if size < 0 {
+        return "", fmt.Errorf("negative length specified for string at byte %s",
+            dec.r.Tell())
+    }
 
     p := make([]byte, size, size)
     p_read := p[:]
@@ -310,7 +351,7 @@ func (dec *Decoder) get_int(end byte) (int64, error) {
 
         d := b[0]
 
-        if d >= '0' && d <= '9' {
+        if (d >= '0' && d <= '9') || d == '-' {
             digits = append(digits, d)
             continue
         }
