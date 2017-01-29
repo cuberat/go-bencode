@@ -41,6 +41,7 @@ import (
     // "log"
     "io"
     "reflect"
+    "sort"
     "strconv"
     "strings"
 )
@@ -89,7 +90,7 @@ func Decode(r io.Reader) (interface{}, error) {
 }
 
 // Not completed yet
-func Encode(w io.Writer, v interface{}) (string, error) {
+func Encode(w io.Writer, v interface{}) (error) {
     enc := NewEncoder(w)
     return enc.Encode(v)
 }
@@ -148,19 +149,144 @@ func NewDecoder(r io.Reader) *Decoder {
 }
 
 // Not completed yet
-func (enc *Encoder) Encode(v interface{}) (string, error) {
+func (enc *Encoder) Encode(v interface{}) (error) {
     this_type := reflect.TypeOf(v)
     this_kind := this_type.Kind()
 
+    // log.Printf("got kind %s for '%+v'", this_kind.String(), v)
+
     switch this_kind {
+    case reflect.Interface:
+        ival := reflect.ValueOf(v).Elem()
+        return enc.Encode(ival)
+    case reflect.Int:
+        fmt.Fprintf(enc.w, "i%de", v.(int))
+    case reflect.Int8:
+        fmt.Fprintf(enc.w, "i%de", v.(int8))
+    case reflect.Int16:
+        fmt.Fprintf(enc.w, "i%de", v.(int16))
+    case reflect.Int32:
+        fmt.Fprintf(enc.w, "i%de", v.(int32))
+    case reflect.Int64:
+        fmt.Fprintf(enc.w, "i%de", v.(int64))
+    case reflect.Uint:
+        fmt.Fprintf(enc.w, "i%de", v.(uint))
+    case reflect.Uint8:
+        fmt.Fprintf(enc.w, "i%de", v.(uint8))
+    case reflect.Uint16:
+        fmt.Fprintf(enc.w, "i%de", v.(uint16))
+    case reflect.Uint32:
+        fmt.Fprintf(enc.w, "i%de", v.(uint32))
+    case reflect.Uint64:
+        fmt.Fprintf(enc.w, "i%de", v.(uint64))
+
+    case reflect.Float32:
+        f32 := fmt.Sprintf("%f", v.(float32))
+        if err := enc.Encode(f32); err != nil {
+            return err
+        }
+
+    case reflect.Float64:
+        f64 := fmt.Sprintf("%f", v.(float64))
+        if err := enc.Encode(f64); err != nil {
+            return err
+        }
+
     case reflect.Map:
+        return enc.encode_map(v)
+
     case reflect.Struct:
+        return enc.encode_struct(v)
+
     case reflect.Slice:
+        return enc.encode_slice(v)
+
+    case reflect.String:
+        s := v.(string)
+        fmt.Fprintf(enc.w, "%d:%s", len(s), s)
+
     case reflect.Array:
-        
+        return enc.encode_array(v)
+
+    case reflect.Ptr:
+        elem := reflect.ValueOf(v).Elem()
+        if ! elem.IsValid() {
+            return enc.Encode("nil")
+        }
+
+        return enc.Encode(elem)
+
+    default:
+        return fmt.Errorf("invalid data type for encoding: %s",
+            this_kind.String())
     }
 
-    return "", nil
+    return nil
+}
+
+func (enc *Encoder) encode_map(v interface{}) (error) {
+    m := reflect.ValueOf(v)
+    keys := m.MapKeys()
+    map_keys := make([]string, 0, len(keys))
+    new_map := make(map[string]interface{}, len(keys))
+
+    // keys in a map are required to be strings in bencode
+    for _, k := range keys {
+        skey := fmt.Sprintf("%s", k)
+        map_keys = append(map_keys, skey)
+
+        new_map[skey] = m.MapIndex(k).Interface()
+    }
+
+    // keys must be in lexical order
+    sort.Strings(map_keys)
+
+    w := enc.w
+    w.Write([]byte{'d'})
+    for _, k := range map_keys {
+        err := enc.Encode(k)
+        if err != nil {
+            return err
+        }
+
+        err = enc.Encode(new_map[k])
+        if err != nil {
+            return err
+        }
+
+    }
+    w.Write([]byte{'e'})
+
+
+    return nil
+}
+
+func (enc *Encoder) encode_struct(v interface{}) (error) {
+
+    
+    return fmt.Errorf("encode_struct() not implemented yet: got '%+v'", v)
+}
+
+func (enc *Encoder) encode_slice(v interface{}) (error) {
+    obj := reflect.ValueOf(v)
+
+    w := enc.w
+    w.Write([]byte{'l'})
+
+    for i := 0; i < obj.Len(); i++ {
+        err := enc.Encode(obj.Index(i).Interface())
+        if err != nil {
+            return err
+        }
+    }
+
+    w.Write([]byte{'e'})
+
+    return nil
+}
+
+func (enc *Encoder) encode_array(v interface{}) (error) {
+    return enc.encode_slice(v)
 }
 
 // func Unmarshal(data []byte, v interface{}) error {
