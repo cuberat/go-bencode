@@ -150,6 +150,11 @@ func NewDecoder(r io.Reader) *Decoder {
 
 // Not completed yet
 func (enc *Encoder) Encode(v interface{}) (error) {
+    vt, ok := v.(reflect.Value)
+    if ok {
+        v = vt.Interface()
+    }
+
     this_type := reflect.TypeOf(v)
     this_kind := this_type.Kind()
 
@@ -159,6 +164,7 @@ func (enc *Encoder) Encode(v interface{}) (error) {
     case reflect.Interface:
         ival := reflect.ValueOf(v).Elem()
         return enc.Encode(ival)
+
     case reflect.Int:
         fmt.Fprintf(enc.w, "i%de", v.(int))
     case reflect.Int8:
@@ -262,9 +268,21 @@ func (enc *Encoder) encode_map(v interface{}) (error) {
 }
 
 func (enc *Encoder) encode_struct(v interface{}) (error) {
+    t := reflect.TypeOf(v)
+    val := reflect.ValueOf(v)
 
-    
-    return fmt.Errorf("encode_struct() not implemented yet: got '%+v'", v)
+    field_map := make(map[string]interface{}, val.NumField())
+
+    for i := 0; i < t.NumField(); i++ {
+        f := t.Field(i)
+        
+        // log.Printf("found field %s with name %s", f, f.Name)
+        fv := val.Field(i)
+
+        field_map[f.Name] = fv
+    }
+
+    return enc.encode_map(field_map)
 }
 
 func (enc *Encoder) encode_slice(v interface{}) (error) {
