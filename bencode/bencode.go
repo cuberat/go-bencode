@@ -32,11 +32,76 @@
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
+// The bencode package encodes/decodes data structures to/from the
+// Bencode format (https://en.wikipedia.org/wiki/Bencode).
+//
+// Decoding:
+//   byte string -> string
+//   integer -> int64
+//   list -> []interface{}
+//   dictionary -> map[string]interface{}
+//
+// Encoding:
+//   string -> byte string
+//   int, int16, int32, int64 -> integer
+//   float32, float64 -> byte string
+//   any slice -> list
+//   map -> dictionary
+//   struct -> dictionary
+//
+// Examples:
+//
+//    package main
+//
+//    import (
+//        "fmt"
+//        "github.com/cuberat/go-bencode/bencode"
+//        "log"
+//    )
+//
+//    func main() {
+//        bencode_str := "d3:bar4:spam4:catsli1ei-2ei3ee3:fooi42ee"
+//
+//        data, err := bencode.DecodeString(bencode_str)
+//        if err != nil {
+//            log.Fatalf("couldn't decode: %s", err)
+//        }
+//
+//        fmt.Printf("decoded %+v\n", data)
+//    }
+//    ----
+//    >$ decoded map[cats:[1 -2 3] foo:42 bar:spam]
+//
+//    --------------------
+//
+//    package main
+//
+//    import (
+//        "fmt"
+//        "github.com/cuberat/go-bencode/bencode"
+//        "log"
+//    )
+//
+//    func main() {
+//        my_map := map[string]string{}
+//        my_map["foo"] = "bar2"
+//        my_map["bar"] = "foo2"
+//        my_map["zebra"] = "not a horse"
+//
+//        encoded, err := bencode.EncodeToString(my_map)
+//        if err != nil {
+//            log.Fatalf("couldn't encode: %s", err)
+//        }
+//
+//        fmt.Printf("encoded data as '%s'\n", encoded)
+//    }
+//    ----
+//    >$ encoded data as 'd3:bar4:foo23:foo4:bar25:zebra11:not a horsee'
 package bencode
 
 import (
     "bufio"
-    // "bytes"
+    "bytes"
     "fmt"
     // "log"
     "io"
@@ -46,17 +111,21 @@ import (
     "strings"
 )
 
+// Decoder object
 type Decoder struct {
     // r *bufio.Reader
     r *breader
 }
 
+// Encoder object
 type Encoder struct {
     w io.Writer
 }
 
 // A Delim is a byte representing the start or end of a list or dictionary:
 //     [ ] { }
+//
+// You only need to worry about this if you want to handle decoding yourself.
 type Delim byte
 
 // A Token holds a value of one of these types:
@@ -65,6 +134,8 @@ type Delim byte
 //         or the end of one: e
 //     int64, for integers
 //     string, for strings
+//
+// You only need to worry about this if you want to handle decoding yourself.
 type Token interface{}
 
 // func Unmarshal(data []byte, v interface {}) error {
@@ -76,28 +147,35 @@ type breader struct {
     pos uint64
 }
 
-func ParseString(s string) (interface{}, error) {
-    r := strings.NewReader(s)
-    return Parse(r)
-}
-
+// Decode a Bencode data structure provided as a string, s.
 func DecodeString(s string) (interface{}, error) {
-    return ParseString(s)
+    r := strings.NewReader(s)
+     return Decode(r)
 }
 
-func Decode(r io.Reader) (interface{}, error) {
-    return Parse(r)
+// Encode a data structure, v,  to a string.
+func EncodeToString(v interface{}) (string, error) {
+    buf := new(bytes.Buffer)
+    enc := NewEncoder(buf)
+
+    err := enc.Encode(v)
+    if err != nil {
+        return "", err
+    }
+
+    return buf.String(), nil
 }
 
-// Not completed yet
+// Encode the given data structure, v, to the Writer, w.
 func Encode(w io.Writer, v interface{}) (error) {
     enc := NewEncoder(w)
     return enc.Encode(v)
 }
 
-func Parse(r io.Reader) (interface{}, error) {
+// Decode a Bencode data structure from the Reader, r.
+func Decode(r io.Reader) (interface{}, error) {
     dec := NewDecoder(r)
-    v, err := dec.Parse()
+    v, err := dec.Decode()
 
     if err == io.EOF {
         err = nil
@@ -133,6 +211,7 @@ func new_reader (r io.Reader) (*breader) {
     return reader
 }
 
+// Create a new Encoder to encode data structures to Bencode.
 func NewEncoder(w io.Writer) *Encoder {
     enc := new(Encoder)
     enc.w = w
@@ -140,15 +219,16 @@ func NewEncoder(w io.Writer) *Encoder {
     return enc
 }
 
+// Create a new Decoder to decode data structures from Bencode.
 func NewDecoder(r io.Reader) *Decoder {
     dec := new(Decoder)
     dec.r = new_reader(r)
-    // dec.r = bufio.NewReader(r)
 
     return dec
 }
 
-// Not completed yet
+// Encode the given data structure, v, to Bencode on the Writer provided to
+// NewEncoder().
 func (enc *Encoder) Encode(v interface{}) (error) {
     vt, ok := v.(reflect.Value)
     if ok {
@@ -157,8 +237,6 @@ func (enc *Encoder) Encode(v interface{}) (error) {
 
     this_type := reflect.TypeOf(v)
     this_kind := this_type.Kind()
-
-    // log.Printf("got kind %s for '%+v'", this_kind.String(), v)
 
     switch this_kind {
     case reflect.Interface:
@@ -275,8 +353,6 @@ func (enc *Encoder) encode_struct(v interface{}) (error) {
 
     for i := 0; i < t.NumField(); i++ {
         f := t.Field(i)
-        
-        // log.Printf("found field %s with name %s", f, f.Name)
         fv := val.Field(i)
 
         field_map[f.Name] = fv
@@ -307,17 +383,9 @@ func (enc *Encoder) encode_array(v interface{}) (error) {
     return enc.encode_slice(v)
 }
 
-// func Unmarshal(data []byte, v interface{}) error {
-//     dec := NewDecoder(bytes.NewReader(data))
-//     return dec.UnmarshalNext(v)
-// }
-
-// func (dec *Decoder) UnmarshalNext(v interface{}) error {
-
-//     return nil
-// }
-
-func (dec *Decoder) Parse() (interface{}, error) {
+// Decode the Bencode data from the Reader provided to NewDecoder()
+// and return the resulting data structure as an interface.
+func (dec *Decoder) Decode() (interface{}, error) {
     token, err := dec.Token()
     if err != nil {
         return nil, err
@@ -379,7 +447,6 @@ func (dec *Decoder) parse_list() ([]interface{}, error) {
     l := make([]interface{}, 0, 0)
 
     for token, err := dec.Token(); err == nil; token, err = dec.Token() {
-        // switch t := token.(type) {
         switch token.(type) {
         case Delim:
             switch token.(Delim) {
@@ -411,6 +478,10 @@ func (dec *Decoder) parse_list() ([]interface{}, error) {
     return l, nil
 }
 
+// Return the next Bencode token from the Reader provided to NewDecoder().
+// Return values are a Delim ('l', 'd', or 'e'), an int64, or a string.
+//
+// You only need to worry about this if you want to handle decoding yourself.
 func (dec *Decoder) Token() (Token, error) {
     r := dec.r
 
