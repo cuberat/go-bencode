@@ -97,11 +97,14 @@ import (
     "fmt"
     // "log"
     "io"
+    // "os"
     "reflect"
     "sort"
     "strconv"
     "strings"
 )
+
+const Version = "0.9.0"
 
 // Decoder object
 type Decoder struct {
@@ -137,6 +140,67 @@ type Token interface{}
 type breader struct {
     r *bufio.Reader
     pos uint64
+}
+
+func FillData(out interface{}, d interface{}) error {
+    // FIXME: assumes out is pointer to struct
+    // FIXME: assume d is map[string]interface{}
+    m, ok := d.(map[string]interface{})
+    if !ok {
+        return fmt.Errorf("FillData not passed map[string]interface{}")
+    }
+    return unmarshal_struct(out, m)
+}
+
+func unmarshal_struct(v interface{}, d map[string]interface{}) (error) {
+    val := reflect.ValueOf(v)
+    k := val.Kind()
+    out := val
+
+    // for k == reflect.Ptr || k == reflect.Interface {
+    // for k == reflect.Ptr {
+    if k == reflect.Interface {
+        out = out.Elem()
+
+        if ! out.IsValid() {
+            return fmt.Errorf("invalid value passed to decoder")
+        }
+        // v = elem.Interface()
+        // val = reflect.ValueOf(v)
+        k = out.Kind()
+    }
+    if k == reflect.Ptr {
+        out = out.Elem()
+        if ! out.IsValid() {
+            return fmt.Errorf("invalid value passed to decoder")
+        }
+        // v = elem.Interface()
+        // val = reflect.ValueOf(v)
+        k = out.Kind()
+    }
+
+    // t := reflect.TypeOf(out.Interface())
+    t := out.Type()
+
+    for i := 0; i < t.NumField(); i++ {
+        f := t.Field(i)
+        tag_val := f.Tag.Get("bencode")
+        flag_list := strings.Split(tag_val, ",")
+        name := flag_list[0]
+        if name == "" {
+            name = f.Name
+        }
+
+        d_val, ok := d[name]
+        if ok {
+            f_val := out.Field(i)
+            // fk := f_val.Kind()
+            // fmt.Fprintf(os.Stderr, "setting field %s (%s)\n", name, fk)
+            f_val.Set(reflect.ValueOf(d_val))
+        }
+    }
+
+    return nil
 }
 
 // Decode a Bencode data structure provided as a string, s.
@@ -374,6 +438,7 @@ func (enc *Encoder) encode_slice(v interface{}) (error) {
 func (enc *Encoder) encode_array(v interface{}) (error) {
     return enc.encode_slice(v)
 }
+
 
 // Decode the Bencode data from the Reader provided to NewDecoder()
 // and return the resulting data structure as an interface.
