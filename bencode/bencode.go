@@ -191,16 +191,35 @@ func unmarshal_struct(v interface{}, d map[string]interface{}) (error) {
             name = f.Name
         }
 
-        d_val, ok := d[name]
+        d_data, ok := d[name]
         if ok {
             f_val := out.Field(i)
+            d_val := reflect.ValueOf(d_data)
             // fk := f_val.Kind()
-            // fmt.Fprintf(os.Stderr, "setting field %s (%s)\n", name, fk)
-            f_val.Set(reflect.ValueOf(d_val))
+            // d_k := d_val.Kind()
+            // fmt.Fprintf(os.Stderr, "setting field %s (%s), input is a %s\n", name, fk, d_k)
+            // f_val.Set(reflect.ValueOf(d_data))
+
+            err := set_val_coerce(&f_val, d_val)
+            if err != nil {
+                return err
+            }
         }
     }
 
     return nil
+}
+
+func set_val_coerce(out *reflect.Value, in reflect.Value) error {
+    out_kind := out.Kind()
+    in_kind := in.Kind()
+
+    if in_kind == out_kind {
+        out.Set(in)
+        return nil
+    }
+
+    return fmt.Errorf("don't know how to coerce %s to %s", in_kind, out_kind)
 }
 
 // Decode a Bencode data structure provided as a string, s.
