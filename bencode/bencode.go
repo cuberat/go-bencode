@@ -104,7 +104,7 @@ import (
     "strings"
 )
 
-const Version = "0.9.0"
+const Version = "0.9.1"
 
 // Decoder object
 type Decoder struct {
@@ -142,31 +142,17 @@ type breader struct {
     pos uint64
 }
 
-func FillData(out interface{}, d interface{}) error {
-    // FIXME: assumes out is pointer to struct
-    // FIXME: assume d is map[string]interface{}
-    m, ok := d.(map[string]interface{})
-    if !ok {
-        return fmt.Errorf("FillData not passed map[string]interface{}")
-    }
-    return unmarshal_struct(out, m)
-}
+func FillData(out_intfc interface{}, in_intfc interface{}) error {
+    out := reflect.ValueOf(out_intfc)
+    in := reflect.ValueOf(in_intfc)
 
-func unmarshal_struct(v interface{}, d map[string]interface{}) (error) {
-    val := reflect.ValueOf(v)
-    k := val.Kind()
-    out := val
-
-    // for k == reflect.Ptr || k == reflect.Interface {
-    // for k == reflect.Ptr {
+    k := out.Kind()
     if k == reflect.Interface {
         out = out.Elem()
 
         if ! out.IsValid() {
             return fmt.Errorf("invalid value passed to decoder")
         }
-        // v = elem.Interface()
-        // val = reflect.ValueOf(v)
         k = out.Kind()
     }
     if k == reflect.Ptr {
@@ -174,12 +160,18 @@ func unmarshal_struct(v interface{}, d map[string]interface{}) (error) {
         if ! out.IsValid() {
             return fmt.Errorf("invalid value passed to decoder")
         }
-        // v = elem.Interface()
-        // val = reflect.ValueOf(v)
         k = out.Kind()
     }
 
-    // t := reflect.TypeOf(out.Interface())
+    return set_val_coerce(&out, in)
+}
+
+func unmarshal_struct(out *reflect.Value, in reflect.Value) (error) {
+    d, ok := in.Interface().(map[string]interface{})
+    if !ok {
+        return fmt.Errorf("FillData not passed map[string]interface{}")
+    }
+
     t := out.Type()
 
     for i := 0; i < t.NumField(); i++ {
@@ -214,12 +206,229 @@ func set_val_coerce(out *reflect.Value, in reflect.Value) error {
     out_kind := out.Kind()
     in_kind := in.Kind()
 
+    switch {
+    case in_kind == out_kind:
+        out.Set(in)
+        return nil
+    case out_kind == reflect.String:
+        return set_val_coerce_to_string(out, in)
+    case is_kind_int(out_kind):
+        return set_val_coerce_to_int(out, in)
+    case is_kind_float(out_kind):
+        return set_val_coerce_to_float(out, in)
+    case out_kind == reflect.Struct:
+        return unmarshal_struct(out, in)
+    case out_kind == reflect.Slice:
+        return set_val_coerce_slice(out, in)
+
+    }
+
+    return fmt.Errorf("don't know how to coerce %s to %s (%s to %s) (%T to %T)",
+        in.Kind(), out.Kind(), in.Type(), out.Type(), in, out)
+}
+
+func set_val_coerce_slice(out *reflect.Value, in reflect.Value) error {
+    in_type := in.Type()
+    out_type := out.Type()
+    in_kind := in.Kind()
+    // out_kind := out.Kind()
+
+    if in_type == out_type {
+        out.Set(in)
+        return nil
+    }
+
+    if in_kind != reflect.Slice {
+        if in_kind == reflect.String {
+            if _, ok := in.Interface().([]byte); ok {
+                s := in.String()
+                out.Set(reflect.ValueOf([]byte(s)))
+                return nil
+            }
+        }
+        // FIXME: stringify?
+    }
+
+    return fmt.Errorf("don't know how to coerce %T to %T", in, out)
+}
+
+func set_val_coerce_to_string(out *reflect.Value, in reflect.Value) error {
+    in_kind := in.Kind()
+
+    if in_kind == reflect.String {
+        out.Set(in)
+        return nil
+    }
+    
+    if is_signed, ok := get_int_kind(in_kind); ok {
+        var s string
+        if is_signed {
+            s = strconv.FormatInt(in.Int(), 10)
+        } else {
+            strconv.FormatUint(in.Uint(), 10)
+        }
+        out.SetString(s)
+
+        return nil
+    }
+
+    if is_kind_float(in_kind) {
+        s := strconv.FormatFloat(in.Float(), 'g', -1, 64)
+        out.SetString(s)
+        return nil
+    }
+
+    if in_kind == reflect.Slice {
+        intfc := in.Interface()
+        if byte_slice, ok := intfc.([]byte); ok {
+            s := string(byte_slice)
+            out.SetString(s)
+            return nil
+        }
+    }
+
+    return fmt.Errorf("don't know how to coerce %s to %s (%s to %s) (%T to %T)",
+        in.Kind(), out.Kind(), in.Type(), out.Type(),
+        in.Interface(), out.Interface())
+}
+
+func set_val_coerce_to_float(out *reflect.Value, in reflect.Value) error {
+    in_kind := in.Kind()
+    if is_kind_float(in_kind) {
+        out.SetFloat(in.Float())
+        return nil
+    }
+
+    if in_kind == reflect.String {
+        in_float, err := strconv.ParseFloat(in.String(), 64)
+        if err != nil {
+            return err
+        }
+        out.SetFloat(in_float)
+        return nil
+    }
+
+    if is_signed, ok := get_int_kind(in_kind); ok {
+        var in_float float64
+        if is_signed {
+            in_float = float64(in.Int())
+        } else {
+            in_float = float64(in.Uint())
+        }
+        out.SetFloat(in_float)
+        return nil
+    }
+
+    return fmt.Errorf("don't know how to coerce %s to %s (%s to %s)",
+        in.Kind(), out.Kind(), in.Type(), out.Type())
+}
+
+func set_val_coerce_to_int(out *reflect.Value, in reflect.Value) error {
+    out_kind := out.Kind()
+    out_type := out.Type()
+    in_kind := in.Kind()
+    in_type := in.Type()
+
     if in_kind == out_kind {
         out.Set(in)
         return nil
     }
 
-    return fmt.Errorf("don't know how to coerce %s to %s", in_kind, out_kind)
+    if in_is_signed, ok := get_int_kind(in_kind); ok {
+        return set_val_coerce_int_to_int(out, in, in_is_signed)
+    }
+
+    switch in_kind {
+    case reflect.String:
+        return set_val_coerce_string_to_int(out, in)
+    }
+
+    return fmt.Errorf("don't know how to coerce %s to %s (%s to %s)",
+        in_kind, out_kind, in_type, out_type)
+}
+
+func set_val_coerce_int_to_int(out *reflect.Value, in reflect.Value,
+    in_is_signed bool) error {
+
+    switch out.Kind() {
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        if in_is_signed {
+            out.SetInt(in.Int())
+        } else {
+            out.SetInt(int64(in.Uint()))
+        }
+
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+        if in_is_signed {
+            out.SetUint(uint64(in.Int()))
+        } else {
+            out.SetUint(in.Uint())
+        }
+
+    default:
+        return fmt.Errorf("don't know how to coerce %s to %s (%s to %s)",
+            in.Kind(), out.Kind(), in.Type(), out.Type())
+    }
+
+    return nil    
+}
+
+func set_val_coerce_string_to_int(out *reflect.Value, in reflect.Value) error {
+    switch out.Kind() {
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        the_int, err := strconv.ParseInt(in.String(), 10, 64)
+        if err != nil {
+            return err
+        }
+        out.SetInt(the_int)
+
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+        the_uint, err := strconv.ParseUint(in.String(), 10, 64)
+        if err != nil {
+            return err
+        }
+        out.SetUint(the_uint)
+
+    default:
+        return fmt.Errorf("don't know how to coerce %s to %s (%s to %s)",
+            in.Kind(), out.Kind(), in.Type(), out.Type())
+    }
+
+    return nil
+}
+
+func is_kind_float(kind reflect.Kind) bool {
+    switch kind {
+    case reflect.Float32, reflect.Float64:
+        return true
+    }
+
+    return false
+}
+
+func is_kind_int(kind reflect.Kind) bool {
+    switch kind {
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        fallthrough
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+        return true
+    }
+
+    return false
+}
+
+func get_int_kind(kind reflect.Kind) (is_signed, ok bool) {
+    is_signed = false
+    ok = false
+    switch kind {
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        is_signed = true
+        ok = true
+    case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+        ok = true
+    }
+
+    return is_signed, ok
 }
 
 // Decode a Bencode data structure provided as a string, s.
