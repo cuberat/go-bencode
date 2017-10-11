@@ -97,7 +97,7 @@ import (
     "fmt"
     // "log"
     "io"
-    // "os"
+    "os"
     "reflect"
     "sort"
     "strconv"
@@ -204,12 +204,29 @@ func unmarshal_struct(out *reflect.Value, in reflect.Value) (error) {
 
 func set_val_coerce(out *reflect.Value, in reflect.Value) error {
     out_kind := out.Kind()
+    out_type := out.Type()
     in_kind := in.Kind()
+    in_type := in.Type()
+
+    if in_kind == out_kind {
+        if in_type == out_type {
+            out.Set(in)
+            return nil
+        }
+    }
+
+    if out_kind != reflect.Interface {
+        if in_kind == reflect.Interface {
+            new_in := in.Elem()
+            return set_val_coerce(out, new_in)
+        }
+    } else {
+        // FIXME: test
+        out.Set(in)
+    }
+
 
     switch {
-    case in_kind == out_kind:
-        out.Set(in)
-        return nil
     case out_kind == reflect.String:
         return set_val_coerce_to_string(out, in)
     case is_kind_int(out_kind):
@@ -233,10 +250,8 @@ func set_val_coerce_slice(out *reflect.Value, in reflect.Value) error {
     in_kind := in.Kind()
     // out_kind := out.Kind()
 
-    if in_type == out_type {
-        out.Set(in)
-        return nil
-    }
+    in_length := in.Len()
+    // cap := in_length
 
     if in_kind != reflect.Slice {
         if in_kind == reflect.String {
@@ -247,9 +262,51 @@ func set_val_coerce_slice(out *reflect.Value, in reflect.Value) error {
             }
         }
         // FIXME: stringify?
+
+        return fmt.Errorf("don't know how to coerce %T to %T",
+            in.Interface(), out.Interface())
     }
 
-    return fmt.Errorf("don't know how to coerce %T to %T", in, out)
+    out_elem_type := out_type.Elem()
+
+    if in_length == 0 {
+        new_in := reflect.MakeSlice(out_elem_type, 0, 0)
+        out.Set(new_in)
+        return nil
+    }
+
+    if in_type == out_type {
+        fmt.Fprintf(os.Stderr, "in_type == out_type: %s = %s\n", in_type, out_type)
+        out.Set(in)
+        // reflect.SliceOf(type)
+        // slice_type := 
+
+        return nil
+    }
+
+
+    new_in := reflect.MakeSlice(out_type, 0, in_length)
+
+    for i := 0; i < in_length; i++ {
+        elem := in.Index(i)
+        new_val_ptr := reflect.New(out_elem_type)
+        new_val := new_val_ptr.Elem()
+
+        err := set_val_coerce(&new_val, elem)
+        if err != nil {
+            return fmt.Errorf("couldn't coerce %T(%s) to %T(%s) in slice",
+                elem.Interface(), elem.Kind(), new_val.Interface(), new_val.Kind())
+        }
+
+        new_in = reflect.Append(new_in, new_val)
+    }
+
+    out.Set(new_in)
+
+    return nil
+
+    // return fmt.Errorf("don't know how to coerce %T to %T",
+    //     in.Interface(), out.Interface())
 }
 
 func set_val_coerce_to_string(out *reflect.Value, in reflect.Value) error {
