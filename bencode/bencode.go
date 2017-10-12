@@ -104,7 +104,7 @@ import (
     "strings"
 )
 
-const Version = "0.9.1"
+const Version = "0.9.2"
 
 // Decoder object
 type Decoder struct {
@@ -215,14 +215,15 @@ func set_val_coerce(out *reflect.Value, in reflect.Value) error {
         }
     }
 
-    if out_kind != reflect.Interface {
+    if out_kind == reflect.Interface {
+        // FIXME: test
+        out.Set(reflect.ValueOf(in.Interface()))
+        return nil
+    } else {
         if in_kind == reflect.Interface {
             new_in := in.Elem()
             return set_val_coerce(out, new_in)
         }
-    } else {
-        // FIXME: test
-        out.Set(in)
     }
 
 
