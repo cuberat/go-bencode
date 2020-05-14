@@ -280,7 +280,7 @@ func set_val_coerce_slice(out *reflect.Value, in reflect.Value) error {
         fmt.Fprintf(os.Stderr, "in_type == out_type: %s = %s\n", in_type, out_type)
         out.Set(in)
         // reflect.SliceOf(type)
-        // slice_type := 
+        // slice_type :=
 
         return nil
     }
@@ -317,7 +317,7 @@ func set_val_coerce_to_string(out *reflect.Value, in reflect.Value) error {
         out.Set(in)
         return nil
     }
-    
+
     if is_signed, ok := get_int_kind(in_kind); ok {
         var s string
         if is_signed {
@@ -428,7 +428,7 @@ func set_val_coerce_int_to_int(out *reflect.Value, in reflect.Value,
             in.Kind(), out.Kind(), in.Type(), out.Type())
     }
 
-    return nil    
+    return nil
 }
 
 func set_val_coerce_string_to_int(out *reflect.Value, in reflect.Value) error {
@@ -829,7 +829,7 @@ func (dec *Decoder) Token() (Token, error) {
     r := dec.r
 
     b := []byte{'\n'}
-    
+
     _, err := r.Read(b)
     if err != nil {
         return nil, err
@@ -925,4 +925,3 @@ func (dec *Decoder) get_int(end byte) (int64, error) {
 
     return strconv.ParseInt(string(digits), 10, 64)
 }
-
