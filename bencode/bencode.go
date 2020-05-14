@@ -216,7 +216,6 @@ func set_val_coerce(out *reflect.Value, in reflect.Value) error {
     }
 
     if out_kind == reflect.Interface {
-        // FIXME: test
         out.Set(reflect.ValueOf(in.Interface()))
         return nil
     } else {
