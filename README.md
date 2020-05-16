@@ -1,7 +1,7 @@
 
 
 # bencode
-`import "github.com/cuberat/go-bencode/bencode"`
+`import "github.com/cuberat/go-bencode"`
 
 * [Overview](#pkg-overview)
 * [Index](#pkg-index)
@@ -35,7 +35,7 @@ Examples:
 	
 	import (
 	    "fmt"
-	    "github.com/cuberat/go-bencode/bencode"
+	    "github.com/cuberat/go-bencode"
 	    "log"
 	)
 	
@@ -58,7 +58,7 @@ Examples:
 	
 	import (
 	    "fmt"
-	    "github.com/cuberat/go-bencode/bencode"
+	    "github.com/cuberat/go-bencode"
 	    "log"
 	)
 	
@@ -82,10 +82,12 @@ Examples:
 
 
 ## <a name="pkg-index">Index</a>
+* [Constants](#pkg-constants)
 * [func Decode(r io.Reader) (interface{}, error)](#Decode)
 * [func DecodeString(s string) (interface{}, error)](#DecodeString)
 * [func Encode(w io.Writer, v interface{}) error](#Encode)
 * [func EncodeToString(v interface{}) (string, error)](#EncodeToString)
+* [func FillData(out_intfc interface{}, in_intfc interface{}) error](#FillData)
 * [type Decoder](#Decoder)
   * [func NewDecoder(r io.Reader) *Decoder](#NewDecoder)
   * [func (dec *Decoder) Decode() (interface{}, error)](#Decoder.Decode)
@@ -98,13 +100,17 @@ Examples:
 
 
 #### <a name="pkg-files">Package files</a>
-[bencode.go](/src/github.com/cuberat/go-bencode/bencode/bencode.go) 
+[bencode.go](/src/github.com/cuberat/go-bencode/bencode.go) 
+
+
+## <a name="pkg-constants">Constants</a>
+``` go
+const Version = "0.9.2"
+```
 
 
 
-
-
-## <a name="Decode">func</a> [Decode](/src/target/bencode.go?s=4784:4829#L166)
+## <a name="Decode">func</a> [Decode](/src/target/bencode.go?s=13655:13700#L507)
 ``` go
 func Decode(r io.Reader) (interface{}, error)
 ```
@@ -112,7 +118,7 @@ Decode a Bencode data structure from the Reader, r.
 
 
 
-## <a name="DecodeString">func</a> [DecodeString](/src/target/bencode.go?s=4201:4249#L141)
+## <a name="DecodeString">func</a> [DecodeString](/src/target/bencode.go?s=13072:13120#L482)
 ``` go
 func DecodeString(s string) (interface{}, error)
 ```
@@ -120,7 +126,7 @@ Decode a Bencode data structure provided as a string, s.
 
 
 
-## <a name="Encode">func</a> [Encode](/src/target/bencode.go?s=4626:4673#L160)
+## <a name="Encode">func</a> [Encode](/src/target/bencode.go?s=13497:13544#L501)
 ``` go
 func Encode(w io.Writer, v interface{}) error
 ```
@@ -128,7 +134,7 @@ Encode the given data structure, v, to the Writer, w.
 
 
 
-## <a name="EncodeToString">func</a> [EncodeToString](/src/target/bencode.go?s=4352:4402#L147)
+## <a name="EncodeToString">func</a> [EncodeToString](/src/target/bencode.go?s=13223:13273#L488)
 ``` go
 func EncodeToString(v interface{}) (string, error)
 ```
@@ -136,8 +142,16 @@ Encode a data structure, v,  to a string.
 
 
 
+## <a name="FillData">func</a> [FillData](/src/target/bencode.go?s=3970:4034#L135)
+``` go
+func FillData(out_intfc interface{}, in_intfc interface{}) error
+```
+Utility function to coerce the input to the output structure.
 
-## <a name="Decoder">type</a> [Decoder](/src/target/bencode.go?s=3397:3458#L105)
+
+
+
+## <a name="Decoder">type</a> [Decoder](/src/target/bencode.go?s=3161:3222#L99)
 ``` go
 type Decoder struct {
     // contains filtered or unexported fields
@@ -151,7 +165,7 @@ Decoder object
 
 
 
-### <a name="NewDecoder">func</a> [NewDecoder](/src/target/bencode.go?s=5612:5649#L213)
+### <a name="NewDecoder">func</a> [NewDecoder](/src/target/bencode.go?s=14483:14520#L554)
 ``` go
 func NewDecoder(r io.Reader) *Decoder
 ```
@@ -161,7 +175,7 @@ Create a new Decoder to decode data structures from Bencode.
 
 
 
-### <a name="Decoder.Decode">func</a> (\*Decoder) [Decode](/src/target/bencode.go?s=9493:9542#L378)
+### <a name="Decoder.Decode">func</a> (\*Decoder) [Decode](/src/target/bencode.go?s=18365:18414#L720)
 ``` go
 func (dec *Decoder) Decode() (interface{}, error)
 ```
@@ -171,7 +185,7 @@ and return the resulting data structure as an interface.
 
 
 
-### <a name="Decoder.Token">func</a> (\*Decoder) [Token](/src/target/bencode.go?s=12080:12122#L475)
+### <a name="Decoder.Token">func</a> (\*Decoder) [Token](/src/target/bencode.go?s=20959:21001#L817)
 ``` go
 func (dec *Decoder) Token() (Token, error)
 ```
@@ -183,7 +197,7 @@ You only need to worry about this if you want to handle decoding yourself.
 
 
 
-## <a name="Delim">type</a> [Delim](/src/target/bencode.go?s=3691:3706#L119)
+## <a name="Delim">type</a> [Delim](/src/target/bencode.go?s=3455:3470#L113)
 ``` go
 type Delim byte
 ```
@@ -203,7 +217,7 @@ You only need to worry about this if you want to handle decoding yourself.
 
 
 
-## <a name="Encoder">type</a> [Encoder](/src/target/bencode.go?s=3478:3517#L111)
+## <a name="Encoder">type</a> [Encoder](/src/target/bencode.go?s=3242:3281#L105)
 ``` go
 type Encoder struct {
     // contains filtered or unexported fields
@@ -217,7 +231,7 @@ Encoder object
 
 
 
-### <a name="NewEncoder">func</a> [NewEncoder](/src/target/bencode.go?s=5451:5488#L205)
+### <a name="NewEncoder">func</a> [NewEncoder](/src/target/bencode.go?s=14322:14359#L546)
 ``` go
 func NewEncoder(w io.Writer) *Encoder
 ```
@@ -227,7 +241,7 @@ Create a new Encoder to encode data structures to Bencode.
 
 
 
-### <a name="Encoder.Encode">func</a> (\*Encoder) [Encode](/src/target/bencode.go?s=5814:5863#L222)
+### <a name="Encoder.Encode">func</a> (\*Encoder) [Encode](/src/target/bencode.go?s=14685:14734#L563)
 ``` go
 func (enc *Encoder) Encode(v interface{}) error
 ```
@@ -237,7 +251,7 @@ NewEncoder().
 
 
 
-## <a name="Token">type</a> [Token](/src/target/bencode.go?s=3995:4017#L129)
+## <a name="Token">type</a> [Token](/src/target/bencode.go?s=3759:3781#L123)
 ``` go
 type Token interface{}
 ```
