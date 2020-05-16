@@ -141,6 +141,7 @@ type breader struct {
     pos uint64
 }
 
+// Utility function to coerce the input to the output structure.
 func FillData(out_intfc interface{}, in_intfc interface{}) error {
     out := reflect.ValueOf(out_intfc)
     in := reflect.ValueOf(in_intfc)
